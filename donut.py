@@ -7,9 +7,24 @@ import sys
 import termios
 import time
 import tty
+from datetime import datetime
 
 
 SHADES = ".,-~:;=!*#$@"
+FONT = {
+    "0": ("###", "# #", "# #", "# #", "###"),
+    "1": (" # ", "## ", " # ", " # ", "###"),
+    "2": ("###", "  #", "###", "#  ", "###"),
+    "3": ("###", "  #", "###", "  #", "###"),
+    "4": ("# #", "# #", "###", "  #", "  #"),
+    "5": ("###", "#  ", "###", "  #", "###"),
+    "6": ("###", "#  ", "###", "# #", "###"),
+    "7": ("###", "  #", "  #", "  #", "  #"),
+    "8": ("###", "# #", "###", "# #", "###"),
+    "9": ("###", "# #", "###", "  #", "###"),
+    "-": ("   ", "   ", "###", "   ", "   "),
+    ":": ("   ", " # ", "   ", " # ", "   "),
+}
 
 
 def terminal_size():
@@ -17,9 +32,63 @@ def terminal_size():
     return max(size.columns, 20), max(size.lines, 10)
 
 
+def put_text(pixels, width, height, x, y, rows):
+    for row_index, row in enumerate(rows):
+        yp = y + row_index
+        if not 0 <= yp < height:
+            continue
+        for column_index, char in enumerate(row):
+            xp = x + column_index
+            if char != " " and 0 <= xp < width:
+                pixels[xp + width * yp] = char
+
+
+def ascii_text(text):
+    rows = [""] * 5
+    for char_index, char in enumerate(text):
+        glyph = FONT.get(char)
+        if glyph is None:
+            continue
+        for row_index, row in enumerate(glyph):
+            rows[row_index] += row
+            if char_index != len(text) - 1:
+                rows[row_index] += " "
+    return rows
+
+
+def rotate_clockwise(rows):
+    if not rows:
+        return []
+    width = max(len(row) for row in rows)
+    padded = [row.ljust(width) for row in rows]
+    return ["".join(padded[row][column] for row in range(len(padded) - 1, -1, -1)) for column in range(width)]
+
+
+def side_label(text, height):
+    rows = rotate_clockwise(ascii_text(text))
+    if len(rows) <= height:
+        return rows
+    return rows[:height]
+
+
+def current_labels(height):
+    now = datetime.now()
+
+    date_text = now.strftime("%Y-%m-%d")
+    time_text = now.strftime("%H:%M:%S")
+
+    if len(rotate_clockwise(ascii_text(date_text))) > height:
+        date_text = now.strftime("%m-%d")
+    if len(rotate_clockwise(ascii_text(time_text))) > height:
+        time_text = now.strftime("%H:%M")
+
+    return side_label(date_text, height), side_label(time_text, height)
+
+
 def render(width, height, a_angle, b_angle):
     pixels = [" "] * (width * height)
     depth = [0.0] * (width * height)
+    side_width = 7 if width >= 42 else 0
 
     cos_a = math.cos(a_angle)
     sin_a = math.sin(a_angle)
@@ -29,7 +98,8 @@ def render(width, height, a_angle, b_angle):
     radius1 = 1.0
     radius2 = 2.0
     distance = 5.0
-    scale = min(width * 0.50, height * 1.05)
+    donut_width = width - side_width * 2
+    scale = min(max(donut_width, 10) * 0.50, height * 1.05)
     x_center = width // 2
     y_center = height // 2
 
@@ -76,6 +146,13 @@ def render(width, height, a_angle, b_angle):
 
             phi += 0.07
         theta += 0.02
+
+    if side_width:
+        left_label, right_label = current_labels(height)
+        left_y = max(0, (height - len(left_label)) // 2)
+        right_y = max(0, (height - len(right_label)) // 2)
+        put_text(pixels, width, height, 1, left_y, left_label)
+        put_text(pixels, width, height, width - 6, right_y, right_label)
 
     rows = ["".join(pixels[row * width : (row + 1) * width]) for row in range(height)]
     return "\n".join(rows)
