@@ -1,6 +1,6 @@
 # qqq
 
-An oh-my-zsh plugin that turns the current terminal into a centered rotating ASCII donut, with vertical ASCII date and time sidebars.
+An oh-my-zsh plugin that turns the current terminal into a rotating ASCII donut, with centered 5-line ASCII date and time below it.
 
 ## Usage
 

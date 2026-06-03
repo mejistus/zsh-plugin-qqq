@@ -12,18 +12,19 @@ from datetime import datetime
 
 SHADES = ".,-~:;=!*#$@"
 FONT = {
-    "0": ("###", "# #", "# #", "# #", "###"),
-    "1": (" # ", "## ", " # ", " # ", "###"),
-    "2": ("###", "  #", "###", "#  ", "###"),
-    "3": ("###", "  #", "###", "  #", "###"),
-    "4": ("# #", "# #", "###", "  #", "  #"),
-    "5": ("###", "#  ", "###", "  #", "###"),
-    "6": ("###", "#  ", "###", "# #", "###"),
-    "7": ("###", "  #", "  #", "  #", "  #"),
-    "8": ("###", "# #", "###", "# #", "###"),
-    "9": ("###", "# #", "###", "  #", "###"),
-    "-": ("   ", "   ", "###", "   ", "   "),
-    ":": ("   ", " # ", "   ", " # ", "   "),
+    "0": ("#####", "#   #", "#   #", "#   #", "#####"),
+    "1": ("  #  ", " ##  ", "  #  ", "  #  ", "#####"),
+    "2": ("#####", "    #", "#####", "#    ", "#####"),
+    "3": ("#####", "    #", "#####", "    #", "#####"),
+    "4": ("#   #", "#   #", "#####", "    #", "    #"),
+    "5": ("#####", "#    ", "#####", "    #", "#####"),
+    "6": ("#####", "#    ", "#####", "#   #", "#####"),
+    "7": ("#####", "    #", "   # ", "  #  ", "  #  "),
+    "8": ("#####", "#   #", "#####", "#   #", "#####"),
+    "9": ("#####", "#   #", "#####", "    #", "#####"),
+    "-": ("     ", "     ", "#####", "     ", "     "),
+    ":": ("     ", "  #  ", "     ", "  #  ", "     "),
+    " ": ("     ", "     ", "     ", "     ", "     "),
 }
 
 
@@ -56,39 +57,37 @@ def ascii_text(text):
     return rows
 
 
-def rotate_clockwise(rows):
-    if not rows:
-        return []
-    width = max(len(row) for row in rows)
-    padded = [row.ljust(width) for row in rows]
-    return ["".join(padded[row][column] for row in range(len(padded) - 1, -1, -1)) for column in range(width)]
+def centered_rows(rows, width):
+    centered = []
+    for row in rows:
+        if len(row) > width:
+            centered.append(row[:width])
+            continue
+        centered.append(row.center(width))
+    return centered
 
 
-def side_label(text, height):
-    rows = rotate_clockwise(ascii_text(text))
-    if len(rows) <= height:
-        return rows
-    return rows[:height]
-
-
-def current_labels(height):
+def current_label_rows(width):
     now = datetime.now()
-
     date_text = now.strftime("%Y-%m-%d")
     time_text = now.strftime("%H:%M:%S")
 
-    if len(rotate_clockwise(ascii_text(date_text))) > height:
+    if len(ascii_text(date_text)[0]) > width:
         date_text = now.strftime("%m-%d")
-    if len(rotate_clockwise(ascii_text(time_text))) > height:
+    if len(ascii_text(time_text)[0]) > width:
         time_text = now.strftime("%H:%M")
 
-    return side_label(date_text, height), side_label(time_text, height)
+    rows = centered_rows(ascii_text(date_text), width)
+    rows += [" " * width]
+    rows += centered_rows(ascii_text(time_text), width)
+    return rows
 
 
 def render(width, height, a_angle, b_angle):
     pixels = [" "] * (width * height)
     depth = [0.0] * (width * height)
-    side_width = 7 if width >= 42 else 0
+    label_rows = current_label_rows(width) if height >= 18 and width >= 32 else []
+    label_height = len(label_rows)
 
     cos_a = math.cos(a_angle)
     sin_a = math.sin(a_angle)
@@ -98,10 +97,10 @@ def render(width, height, a_angle, b_angle):
     radius1 = 1.0
     radius2 = 2.0
     distance = 5.0
-    donut_width = width - side_width * 2
-    scale = min(max(donut_width, 10) * 0.50, height * 1.05)
+    donut_height = height - label_height - 2 if label_rows else height
+    scale = min(width * 0.50, max(donut_height, 8) * 1.05)
     x_center = width // 2
-    y_center = height // 2
+    y_center = max(0, donut_height // 2)
 
     theta = 0.0
     while theta < math.tau:
@@ -147,12 +146,9 @@ def render(width, height, a_angle, b_angle):
             phi += 0.07
         theta += 0.02
 
-    if side_width:
-        left_label, right_label = current_labels(height)
-        left_y = max(0, (height - len(left_label)) // 2)
-        right_y = max(0, (height - len(right_label)) // 2)
-        put_text(pixels, width, height, 1, left_y, left_label)
-        put_text(pixels, width, height, width - 6, right_y, right_label)
+    if label_rows:
+        label_y = max(0, height - label_height - 1)
+        put_text(pixels, width, height, 0, label_y, label_rows)
 
     rows = ["".join(pixels[row * width : (row + 1) * width]) for row in range(height)]
     return "\n".join(rows)
