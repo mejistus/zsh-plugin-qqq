@@ -10,6 +10,7 @@ import tty
 from datetime import datetime
 
 
+RESET = "\033[0m"
 SHADES = ".,-~:;=!*#$@"
 FONT = {
     "0": ("#####", "#   #", "#   #", "#   #", "#####"),
@@ -28,12 +29,18 @@ FONT = {
 }
 
 
+def color_code(theta, phi, luminance):
+    hue = int(((theta + phi) / math.tau) * 36) % 36
+    brightness = max(0, min(5, int((luminance + 1.2) * 2.1)))
+    return f"\033[38;5;{16 + 36 * brightness + hue}m"
+
+
 def terminal_size():
     size = os.get_terminal_size()
     return max(size.columns, 20), max(size.lines, 10)
 
 
-def put_text(pixels, width, height, x, y, rows):
+def put_text(chars, colors, width, height, x, y, rows):
     for row_index, row in enumerate(rows):
         yp = y + row_index
         if not 0 <= yp < height:
@@ -41,7 +48,9 @@ def put_text(pixels, width, height, x, y, rows):
         for column_index, char in enumerate(row):
             xp = x + column_index
             if char != " " and 0 <= xp < width:
-                pixels[xp + width * yp] = char
+                index = xp + width * yp
+                chars[index] = char
+                colors[index] = RESET
 
 
 def ascii_text(text):
@@ -84,7 +93,8 @@ def current_label_rows(width):
 
 
 def render(width, height, a_angle, b_angle):
-    pixels = [" "] * (width * height)
+    chars = [" "] * (width * height)
+    colors = [""] * (width * height)
     depth = [0.0] * (width * height)
     label_rows = current_label_rows(width) if height >= 18 and width >= 32 else []
     label_height = len(label_rows)
@@ -141,16 +151,30 @@ def render(width, height, a_angle, b_angle):
                 if inverse_z > depth[index]:
                     depth[index] = inverse_z
                     shade = max(0, min(len(SHADES) - 1, int(luminance * 8)))
-                    pixels[index] = SHADES[shade]
+                    chars[index] = SHADES[shade]
+                    colors[index] = color_code(theta, phi, luminance)
 
             phi += 0.07
         theta += 0.02
 
     if label_rows:
         label_y = max(0, height - label_height - 1)
-        put_text(pixels, width, height, 0, label_y, label_rows)
+        put_text(chars, colors, width, height, 0, label_y, label_rows)
 
-    rows = ["".join(pixels[row * width : (row + 1) * width]) for row in range(height)]
+    rows = []
+    for row in range(height):
+        rendered = []
+        active_color = ""
+        for column in range(width):
+            index = column + width * row
+            color = colors[index]
+            if color != active_color:
+                rendered.append(color)
+                active_color = color
+            rendered.append(chars[index])
+        if active_color:
+            rendered.append(RESET)
+        rows.append("".join(rendered))
     return "\n".join(rows)
 
 
@@ -189,7 +213,7 @@ def main():
             b_angle += 0.03
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, previous_termios)
-        sys.stdout.write("\033[2J\033[H\033[?25h\033[?1049l")
+        sys.stdout.write(RESET + "\033[2J\033[H\033[?25h\033[?1049l")
         sys.stdout.flush()
 
 
